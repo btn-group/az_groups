@@ -71,6 +71,28 @@ mod az_groups {
 
             Ok(group)
         }
+
+        #[ink(message)]
+        pub fn group_users_create(&mut self, name: String) -> Result<GroupUser, AZGroupsError> {
+            // check if group with key exists
+            let key: String = name.to_lowercase();
+            if self.groups.get(key.clone()).is_none() {
+                return Err(AZGroupsError::NotFound("Group".to_string()));
+            }
+            // check if group user already exists
+            let caller: AccountId = Self::env().caller();
+            if self.group_users.get((key.clone(), caller)).is_some() {
+                return Err(AZGroupsError::UnprocessableEntity(
+                    "GroupUser not unique.".to_string(),
+                ));
+            }
+
+            // Create and set group user
+            let group_user: GroupUser = GroupUser { role: 0 };
+            self.group_users.insert((key.clone(), caller), &group_user);
+
+            Ok(group_user)
+        }
     }
 
     #[cfg(test)]
@@ -87,6 +109,33 @@ mod az_groups {
         }
 
         // === TEST HANDLES ===
+        #[ink::test]
+        fn test_group_users_create() {
+            let (accounts, mut az_groups) = init();
+            let group_name: String = "The Next Wave".to_string();
+            let key: String = group_name.to_lowercase();
+            // when group with key does not exist
+            // * it raises an error
+            let mut result = az_groups.group_users_create(key.clone());
+            assert_eq!(result, Err(AZGroupsError::NotFound("Group".to_string())));
+            // when group with key exists
+            az_groups.groups_create(key.clone()).unwrap();
+            // = when GroupUser exists
+            result = az_groups.group_users_create(key.clone());
+            // = * it raises an error
+            assert_eq!(
+                result,
+                Err(AZGroupsError::UnprocessableEntity(
+                    "GroupUser not unique.".to_string()
+                ))
+            );
+            // = when GroupUser doesn't exist
+            ink::env::test::set_caller::<ink::env::DefaultEnvironment>(accounts.alice);
+            // = * it creates the group user with the role applicant
+            result = az_groups.group_users_create(key);
+            assert_eq!(result.unwrap().role, 0);
+        }
+
         #[ink::test]
         fn test_groups_create() {
             let (accounts, mut az_groups) = init();
