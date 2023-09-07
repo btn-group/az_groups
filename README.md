@@ -18,6 +18,9 @@
         <li><a href="#setting-up-locally">Setting up locally</a></li>
       </ul>
     </li>
+    <li>
+      <a href="#references">References</a>
+    </li>
   </ol>
 </details>
 
@@ -44,8 +47,6 @@ cargo install --force --locked cargo-contract --version 2.0.1
 
 To get a local copy up and running follow these simple example steps.
 
-* Open brush required that I use rust nightly but building the contract required stable.
-
 ### Prerequisites
 
 * A pre-requisite for compiling smart contracts is to have a stable Rust version and Cargo installed. Here's an [installation guide](https://doc.rust-lang.org/cargo/getting-started/installation.html).
@@ -55,7 +56,6 @@ To get a local copy up and running follow these simple example steps.
 
 ```zsh
 cargo checkmate
-cargo test
 cargo sort
 ```
 
@@ -87,3 +87,7 @@ substrate-contracts-node
 You can interact with your node using the [Contracts UI](https://contracts-ui.substrate.io/). Once you have the webpage open, click on the dropdown selector at the top left corner and choose "Local Node".
 
 Note that blocks are only created when you execute a function in substrate-contracts-node, so trigger a another function first if a function depends on a time delay.
+
+## References 
+
+- https://substrate.stackexchange.com/questions/3765/contract-storage-needs-nested-orderbooks-best-practice-way-to-structure-dapp/3993

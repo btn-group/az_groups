@@ -5,7 +5,10 @@ mod errors;
 #[ink::contract]
 mod az_groups {
     use crate::errors::AZGroupsError;
-    use ink::storage::Mapping;
+    use ink::{
+        prelude::string::{String, ToString},
+        storage::Mapping,
+    };
 
     // === STRUCTS ===
     #[derive(scale::Decode, scale::Encode, Debug, Clone, PartialEq)]
