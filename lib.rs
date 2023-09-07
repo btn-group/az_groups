@@ -1,142 +1,121 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+mod errors;
+
 #[ink::contract]
-mod grupy {
+mod az_groups {
+    use crate::errors::AZGroupsError;
+    use ink::storage::Mapping;
 
-    /// Defines the storage of your contract.
-    /// Add new fields to the below struct in order
-    /// to add new static storage fields to your contract.
+    // === STRUCTS ===
+    #[derive(scale::Decode, scale::Encode, Debug, Clone, PartialEq)]
+    #[cfg_attr(
+        feature = "std",
+        derive(scale_info::TypeInfo, ink::storage::traits::StorageLayout)
+    )]
+    pub struct Group {
+        name: String,
+        enabled: bool,
+    }
+
+    // 0: Applicant
+    // 1: Banned
+    // 2: Member
+    // 3: Admin
+    // 4: SuperAdmin
+    #[derive(scale::Decode, scale::Encode, Debug, Clone, PartialEq)]
+    #[cfg_attr(
+        feature = "std",
+        derive(scale_info::TypeInfo, ink::storage::traits::StorageLayout)
+    )]
+    pub struct GroupUser {
+        role: u8,
+    }
+
     #[ink(storage)]
-    pub struct Grupy {
-        /// Stores a single `bool` value on the storage.
-        value: bool,
+    pub struct AZGroups {
+        groups: Mapping<String, Group>,
+        group_users: Mapping<(String, AccountId), GroupUser>,
+    }
+    impl AZGroups {
+        #[ink(constructor)]
+        pub fn new() -> Self {
+            Self {
+                groups: Mapping::default(),
+                group_users: Mapping::default(),
+            }
+        }
+
+        #[ink(message)]
+        pub fn groups_create(&mut self, name: String) -> Result<Group, AZGroupsError> {
+            // key will be name lowercased
+            // check if group with key already exists
+            let key: String = name.to_lowercase();
+            if self.groups.get(key.clone()).is_some() {
+                return Err(AZGroupsError::UnprocessableEntity(
+                    "Group not unique.".to_string(),
+                ));
+            }
+
+            // Create group
+            let group: Group = Group {
+                name: name.clone(),
+                enabled: true,
+            };
+            self.groups.insert(key.clone(), &group);
+
+            // Create and set group user
+            let group_user: GroupUser = GroupUser { role: 4 };
+            self.group_users
+                .insert((key, Self::env().caller()), &group_user);
+
+            Ok(group)
+        }
     }
 
-    impl Grupy {
-        /// Constructor that initializes the `bool` value to the given `init_value`.
-        #[ink(constructor)]
-        pub fn new(init_value: bool) -> Self {
-            Self { value: init_value }
-        }
-
-        /// Constructor that initializes the `bool` value to `false`.
-        ///
-        /// Constructors can delegate to other constructors.
-        #[ink(constructor)]
-        pub fn default() -> Self {
-            Self::new(Default::default())
-        }
-
-        /// A message that can be called on instantiated contracts.
-        /// This one flips the value of the stored `bool` from `true`
-        /// to `false` and vice versa.
-        #[ink(message)]
-        pub fn flip(&mut self) {
-            self.value = !self.value;
-        }
-
-        /// Simply returns the current value of our `bool`.
-        #[ink(message)]
-        pub fn get(&self) -> bool {
-            self.value
-        }
-    }
-
-    /// Unit tests in Rust are normally defined within such a `#[cfg(test)]`
-    /// module and test functions are marked with a `#[test]` attribute.
-    /// The below code is technically just normal Rust code.
     #[cfg(test)]
     mod tests {
-        /// Imports all the definitions from the outer scope so we can use them here.
         use super::*;
+        use ink::env::{test::DefaultAccounts, DefaultEnvironment};
 
-        /// We test if the default constructor does its job.
+        // === HELPERS ===
+        fn init() -> (DefaultAccounts<DefaultEnvironment>, AZGroups) {
+            let accounts = ink::env::test::default_accounts::<ink::env::DefaultEnvironment>();
+            ink::env::test::set_caller::<ink::env::DefaultEnvironment>(accounts.bob);
+            let az_groups = AZGroups::new();
+            (accounts, az_groups)
+        }
+
+        // === TEST HANDLES ===
         #[ink::test]
-        fn default_works() {
-            let grupy = Grupy::default();
-            assert_eq!(grupy.get(), false);
-        }
+        fn test_groups_create() {
+            let (accounts, mut az_groups) = init();
+            let group_name: String = "The Next Wave".to_string();
+            let key: String = group_name.to_lowercase();
+            // when group with key does not exist
+            // * it creates the group with the supplied name
+            // * it sets the group to enabled
+            // * it returns the created group
+            let mut result = az_groups.groups_create(group_name.clone());
+            let group = result.unwrap();
+            assert_eq!(group.name, group_name);
+            assert_eq!(group.enabled, true);
+            // * it creates and sets a new GroupUser with the caller as super admin
+            let group_user: GroupUser = az_groups
+                .group_users
+                .get((key.clone(), accounts.bob))
+                .unwrap();
+            assert_eq!(group_user.role, 4);
 
-        /// We test a simple use case of our contract.
-        #[ink::test]
-        fn it_works() {
-            let mut grupy = Grupy::new(false);
-            assert_eq!(grupy.get(), false);
-            grupy.flip();
-            assert_eq!(grupy.get(), true);
-        }
-    }
-
-
-    /// This is how you'd write end-to-end (E2E) or integration tests for ink! contracts.
-    ///
-    /// When running these you need to make sure that you:
-    /// - Compile the tests with the `e2e-tests` feature flag enabled (`--features e2e-tests`)
-    /// - Are running a Substrate node which contains `pallet-contracts` in the background
-    #[cfg(all(test, feature = "e2e-tests"))]
-    mod e2e_tests {
-        /// Imports all the definitions from the outer scope so we can use them here.
-        use super::*;
-
-        /// A helper function used for calling contract messages.
-        use ink_e2e::build_message;
-
-        /// The End-to-End test `Result` type.
-        type E2EResult<T> = std::result::Result<T, Box<dyn std::error::Error>>;
-
-        /// We test that we can upload and instantiate the contract using its default constructor.
-        #[ink_e2e::test]
-        async fn default_works(mut client: ink_e2e::Client<C, E>) -> E2EResult<()> {
-            // Given
-            let constructor = GrupyRef::default();
-
-            // When
-            let contract_account_id = client
-                .instantiate("grupy", &ink_e2e::alice(), constructor, 0, None)
-                .await
-                .expect("instantiate failed")
-                .account_id;
-
-            // Then
-            let get = build_message::<GrupyRef>(contract_account_id.clone())
-                .call(|grupy| grupy.get());
-            let get_result = client.call_dry_run(&ink_e2e::alice(), &get, 0, None).await;
-            assert!(matches!(get_result.return_value(), false));
-
-            Ok(())
-        }
-
-        /// We test that we can read and write a value from the on-chain contract contract.
-        #[ink_e2e::test]
-        async fn it_works(mut client: ink_e2e::Client<C, E>) -> E2EResult<()> {
-            // Given
-            let constructor = GrupyRef::new(false);
-            let contract_account_id = client
-                .instantiate("grupy", &ink_e2e::bob(), constructor, 0, None)
-                .await
-                .expect("instantiate failed")
-                .account_id;
-
-            let get = build_message::<GrupyRef>(contract_account_id.clone())
-                .call(|grupy| grupy.get());
-            let get_result = client.call_dry_run(&ink_e2e::bob(), &get, 0, None).await;
-            assert!(matches!(get_result.return_value(), false));
-
-            // When
-            let flip = build_message::<GrupyRef>(contract_account_id.clone())
-                .call(|grupy| grupy.flip());
-            let _flip_result = client
-                .call(&ink_e2e::bob(), flip, 0, None)
-                .await
-                .expect("flip failed");
-
-            // Then
-            let get = build_message::<GrupyRef>(contract_account_id.clone())
-                .call(|grupy| grupy.get());
-            let get_result = client.call_dry_run(&ink_e2e::bob(), &get, 0, None).await;
-            assert!(matches!(get_result.return_value(), true));
-
-            Ok(())
+            // when group with key already exists
+            // * it raises an error
+            result = az_groups.groups_create(key);
+            assert_eq!(
+                result,
+                Err(AZGroupsError::UnprocessableEntity(
+                    "Group not unique.".to_string()
+                ))
+            );
         }
     }
 }
