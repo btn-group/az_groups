@@ -1,15 +1,5 @@
 <!-- PROJECT LOGO -->
-<br />
-<div align="center">
-  <a href="https://github.com/btn-group">
-    <img src="images/logo.png" alt="Logo" height="80">
-  </a>
-
-  <h3 align="center">Groups</h3>
-<!--   <p align="center">
-    <a href="https://btn.group/aleph_zero/safe_send" target="_blank">Try it out</a>
-  </p> -->
-</div>
+# AZ Groups
 
 <!-- TABLE OF CONTENTS -->
 <details>
