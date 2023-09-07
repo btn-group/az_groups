@@ -56,7 +56,7 @@ mod az_groups {
             let key: String = name.to_lowercase();
             if self.groups.get(key.clone()).is_some() {
                 return Err(AZGroupsError::UnprocessableEntity(
-                    "Group not unique.".to_string(),
+                    "Group has already been taken".to_string(),
                 ));
             }
 
@@ -86,7 +86,7 @@ mod az_groups {
             let caller: AccountId = Self::env().caller();
             if self.group_users.get((key.clone(), caller)).is_some() {
                 return Err(AZGroupsError::UnprocessableEntity(
-                    "GroupUser not unique.".to_string(),
+                    "Group user has already been taken".to_string(),
                 ));
             }
 
@@ -95,6 +95,53 @@ mod az_groups {
             self.group_users.insert((key.clone(), caller), &group_user);
 
             Ok(group_user)
+        }
+
+        #[ink(message)]
+        pub fn group_users_update(
+            &mut self,
+            name: String,
+            user: AccountId,
+            role: u8,
+        ) -> Result<GroupUser, AZGroupsError> {
+            if role > 4 {
+                return Err(AZGroupsError::UnprocessableEntity(
+                    "Role must be less than or equal to 4".to_string(),
+                ));
+            }
+            // check if group with key exists
+            let key: String = name.to_lowercase();
+            if self.groups.get(key.clone()).is_none() {
+                return Err(AZGroupsError::NotFound("Group".to_string()));
+            }
+            let caller: AccountId = Self::env().caller();
+            if caller == user {
+                return Err(AZGroupsError::Unauthorised);
+            }
+            if self.group_users.get((key.clone(), caller)).is_none() {
+                return Err(AZGroupsError::NotFound("GroupUser".to_string()));
+            }
+            let caller_group_user: GroupUser = self.group_users.get((key.clone(), caller)).unwrap();
+            // Only an admin can make changes
+            if caller_group_user.role < 3 {
+                return Err(AZGroupsError::Unauthorised);
+            }
+            if self.group_users.get((key.clone(), user)).is_none() {
+                return Err(AZGroupsError::NotFound("GroupUser".to_string()));
+            }
+            let mut user_group_user: GroupUser = self.group_users.get((key.clone(), user)).unwrap();
+            if caller_group_user.role < user_group_user.role {
+                return Err(AZGroupsError::Unauthorised);
+            }
+            if role > caller_group_user.role {
+                return Err(AZGroupsError::Unauthorised);
+            }
+
+            user_group_user.role = role;
+            self.group_users
+                .insert((key.clone(), user), &user_group_user);
+
+            Ok(user_group_user)
         }
     }
 
@@ -129,7 +176,7 @@ mod az_groups {
             assert_eq!(
                 result,
                 Err(AZGroupsError::UnprocessableEntity(
-                    "GroupUser not unique.".to_string()
+                    "Group user has already been taken".to_string()
                 ))
             );
             // = when GroupUser doesn't exist
@@ -137,6 +184,93 @@ mod az_groups {
             // = * it creates the group user with the role applicant
             result = az_groups.group_users_create(key);
             assert_eq!(result.unwrap().role, 0);
+        }
+
+        #[ink::test]
+        fn test_group_users_update() {
+            let (accounts, mut az_groups) = init();
+            let group_name: String = "The Next Wave".to_string();
+            // when role is greater than 4
+            // * it raises an error
+            let mut result = az_groups.group_users_update(group_name.clone(), accounts.alice, 5);
+            assert_eq!(
+                result,
+                Err(AZGroupsError::UnprocessableEntity(
+                    "Role must be less than or equal to 4".to_string()
+                ))
+            );
+            // when role is less than or equal to 4
+            // = when group with key does not exist
+            // = * it raises an error
+            result = az_groups.group_users_update(group_name.clone(), accounts.alice, 4);
+            assert_eq!(result, Err(AZGroupsError::NotFound("Group".to_string())));
+            // = when group with key exists
+            az_groups.groups_create(group_name.clone()).unwrap();
+            // == when caller equals user
+            // == * it raises an error
+            result = az_groups.group_users_update(group_name.clone(), accounts.bob, 4);
+            assert_eq!(result, Err(AZGroupsError::Unauthorised));
+            // == when caller is different to user
+            // === when caller does not have a group user for team
+            ink::env::test::set_caller::<ink::env::DefaultEnvironment>(accounts.charlie);
+            result = az_groups.group_users_update(group_name.clone(), accounts.bob, 4);
+            // === * it raises an error
+            assert_eq!(
+                result,
+                Err(AZGroupsError::NotFound("GroupUser".to_string()))
+            );
+            // === when caller has a group user for team
+            ink::env::test::set_caller::<ink::env::DefaultEnvironment>(accounts.bob);
+            // ==== when caller's role is less than 3
+            let mut caller_group_user: GroupUser = az_groups
+                .group_users
+                .get((group_name.to_lowercase(), accounts.bob))
+                .unwrap();
+            caller_group_user.role = 2;
+            az_groups.group_users.insert(
+                (group_name.to_lowercase(), accounts.bob),
+                &caller_group_user,
+            );
+            // ==== * it raises an error
+            result = az_groups.group_users_update(group_name.clone(), accounts.bob, 2);
+            assert_eq!(result, Err(AZGroupsError::Unauthorised));
+            // ==== when caller's role is 3 or more
+            caller_group_user.role = 3;
+            az_groups.group_users.insert(
+                (group_name.to_lowercase(), accounts.bob),
+                &caller_group_user,
+            );
+            // ===== when user does not have a group user for team
+            result = az_groups.group_users_update(group_name.clone(), accounts.charlie, 4);
+            // ===== * it raises an error
+            assert_eq!(
+                result,
+                Err(AZGroupsError::NotFound("GroupUser".to_string()))
+            );
+            // ===== when user has a role with team
+            // ====== when caller's role is less than user's role
+            let mut user_group_user: GroupUser = GroupUser { role: 4 };
+            az_groups.group_users.insert(
+                (group_name.to_lowercase(), accounts.charlie),
+                &user_group_user,
+            );
+            // ====== * it raises an error
+            result = az_groups.group_users_update(group_name.clone(), accounts.charlie, 4);
+            assert_eq!(result, Err(AZGroupsError::Unauthorised));
+            // ====== when caller's role is greater than or equal to user's role
+            user_group_user = GroupUser { role: 3 };
+            az_groups.group_users.insert(
+                (group_name.to_lowercase(), accounts.charlie),
+                &user_group_user,
+            );
+            // ======= when new role is less than or equal to caller's role
+            // ======= * it updates the user's role
+            result = az_groups.group_users_update(group_name.clone(), accounts.charlie, 3);
+            assert_eq!(result.unwrap().role, 3);
+            // ======= when new role is greater than caller's role
+            // ======= * it raises an error
+            result = az_groups.group_users_update(group_name.clone(), accounts.charlie, 4);
+            assert_eq!(result, Err(AZGroupsError::Unauthorised));
         }
 
         #[ink::test]
@@ -165,7 +299,7 @@ mod az_groups {
             assert_eq!(
                 result,
                 Err(AZGroupsError::UnprocessableEntity(
-                    "Group not unique.".to_string()
+                    "Group has already been taken".to_string()
                 ))
             );
         }
