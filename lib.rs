@@ -76,6 +76,15 @@ mod az_groups {
         }
 
         #[ink(message)]
+        pub fn groups_show(&self, name: String) -> Result<Group, AZGroupsError> {
+            if let Some(group) = self.groups.get(name.to_lowercase()) {
+                Ok(group)
+            } else {
+                Err(AZGroupsError::NotFound("Group".to_string()))
+            }
+        }
+
+        #[ink(message)]
         pub fn group_users_create(&mut self, name: String) -> Result<GroupUser, AZGroupsError> {
             // check if group with key exists
             let key: String = name.to_lowercase();
