@@ -21,8 +21,8 @@ mod az_groups {
         enabled: bool,
     }
 
-    // 0: Applicant
-    // 1: Banned
+    // 0: Banned
+    // 1: Applicant
     // 2: Member
     // 3: Admin
     // 4: SuperAdmin
@@ -63,7 +63,7 @@ mod az_groups {
             }
 
             // Create and set group user
-            let group_user: GroupUser = GroupUser { role: 0 };
+            let group_user: GroupUser = GroupUser { role: 1 };
             self.group_users.insert((key.clone(), caller), &group_user);
 
             Ok(group_user)
@@ -194,7 +194,7 @@ mod az_groups {
             ink::env::test::set_caller::<ink::env::DefaultEnvironment>(accounts.alice);
             // = * it creates the group user with the role applicant
             result = az_groups.group_users_create(key);
-            assert_eq!(result.unwrap().role, 0);
+            assert_eq!(result.unwrap().role, 1);
         }
 
         #[ink::test]
