@@ -111,25 +111,16 @@ mod az_groups {
             }
             // check if group with key exists
             let key: String = name.to_lowercase();
-            if self.groups.get(key.clone()).is_none() {
-                return Err(AZGroupsError::NotFound("Group".to_string()));
-            }
             let caller: AccountId = Self::env().caller();
             if caller == user {
                 return Err(AZGroupsError::Unauthorised);
             }
-            if self.group_users.get((key.clone(), caller)).is_none() {
-                return Err(AZGroupsError::NotFound("GroupUser".to_string()));
-            }
-            let caller_group_user: GroupUser = self.group_users.get((key.clone(), caller)).unwrap();
+            let caller_group_user: GroupUser = self.group_users_show(key.clone(), caller)?;
             // Only an admin can make changes
             if caller_group_user.role < 3 {
                 return Err(AZGroupsError::Unauthorised);
             }
-            if self.group_users.get((key.clone(), user)).is_none() {
-                return Err(AZGroupsError::NotFound("GroupUser".to_string()));
-            }
-            let mut user_group_user: GroupUser = self.group_users.get((key.clone(), user)).unwrap();
+            let mut user_group_user: GroupUser = self.group_users_show(key.clone(), user)?;
             if caller_group_user.role < user_group_user.role {
                 return Err(AZGroupsError::Unauthorised);
             }
@@ -142,6 +133,19 @@ mod az_groups {
                 .insert((key.clone(), user), &user_group_user);
 
             Ok(user_group_user)
+        }
+
+        #[ink(message)]
+        pub fn group_users_show(
+            &self,
+            name: String,
+            user: AccountId,
+        ) -> Result<GroupUser, AZGroupsError> {
+            if let Some(group_user) = self.group_users.get((name.to_lowercase(), user)) {
+                Ok(group_user)
+            } else {
+                Err(AZGroupsError::NotFound("GroupUser".to_string()))
+            }
         }
     }
 
@@ -200,10 +204,6 @@ mod az_groups {
                 ))
             );
             // when role is less than or equal to 4
-            // = when group with key does not exist
-            // = * it raises an error
-            result = az_groups.group_users_update(group_name.clone(), accounts.alice, 4);
-            assert_eq!(result, Err(AZGroupsError::NotFound("Group".to_string())));
             // = when group with key exists
             az_groups.groups_create(group_name.clone()).unwrap();
             // == when caller equals user
