@@ -50,38 +50,10 @@ mod az_groups {
         }
 
         #[ink(message)]
-        pub fn groups_create(&mut self, name: String) -> Result<Group, AZGroupsError> {
-            // key will be name lowercased
-            // check if group with key already exists
-            let key: String = name.to_lowercase();
-            if self.groups.get(key.clone()).is_some() {
-                return Err(AZGroupsError::UnprocessableEntity(
-                    "Group has already been taken".to_string(),
-                ));
-            }
-
-            // Create group
-            let group: Group = Group {
-                name: name.clone(),
-                enabled: true,
-            };
-            self.groups.insert(key.clone(), &group);
-
-            // Create and set group user
-            let group_user: GroupUser = GroupUser { role: 4 };
-            self.group_users
-                .insert((key, Self::env().caller()), &group_user);
-
-            Ok(group)
-        }
-
-        #[ink(message)]
         pub fn group_users_create(&mut self, name: String) -> Result<GroupUser, AZGroupsError> {
             // check if group with key exists
             let key: String = name.to_lowercase();
-            if self.groups.get(key.clone()).is_none() {
-                return Err(AZGroupsError::NotFound("Group".to_string()));
-            }
+            self.groups_show(key.clone())?;
             // check if group user already exists
             let caller: AccountId = Self::env().caller();
             if self.group_users.get((key.clone(), caller)).is_some() {
@@ -145,6 +117,41 @@ mod az_groups {
                 Ok(group_user)
             } else {
                 Err(AZGroupsError::NotFound("GroupUser".to_string()))
+            }
+        }
+
+        #[ink(message)]
+        pub fn groups_create(&mut self, name: String) -> Result<Group, AZGroupsError> {
+            // key will be name lowercased
+            // check if group with key already exists
+            let key: String = name.to_lowercase();
+            if self.groups.get(key.clone()).is_some() {
+                return Err(AZGroupsError::UnprocessableEntity(
+                    "Group has already been taken".to_string(),
+                ));
+            }
+
+            // Create group
+            let group: Group = Group {
+                name: name.clone(),
+                enabled: true,
+            };
+            self.groups.insert(key.clone(), &group);
+
+            // Create and set group user
+            let group_user: GroupUser = GroupUser { role: 4 };
+            self.group_users
+                .insert((key, Self::env().caller()), &group_user);
+
+            Ok(group)
+        }
+
+        #[ink(message)]
+        pub fn groups_show(&self, name: String) -> Result<Group, AZGroupsError> {
+            if let Some(group) = self.groups.get(name.to_lowercase()) {
+                Ok(group)
+            } else {
+                Err(AZGroupsError::NotFound("Group".to_string()))
             }
         }
     }
