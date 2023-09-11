@@ -512,6 +512,16 @@ mod az_groups {
                     "Group has already been taken".to_string()
                 ))
             );
+            // when groups_total is u32 max
+            az_groups.groups_total = u32::MAX;
+            // * it raises an error
+            result = az_groups.groups_create("XXXX".to_string());
+            assert_eq!(
+                result,
+                Err(AZGroupsError::UnprocessableEntity(
+                    "Group limit reached".to_string()
+                ))
+            );
         }
 
         #[ink::test]
