@@ -82,13 +82,16 @@ mod az_groups {
         }
 
         #[ink(message)]
-        pub fn group_users_create(&mut self, name: String) -> Result<GroupUser, AZGroupsError> {
+        pub fn group_users_create(
+            &mut self,
+            group_name: String,
+        ) -> Result<GroupUser, AZGroupsError> {
             // check if group with key exists
-            let key: String = name.to_lowercase();
+            let key: String = group_name.to_lowercase();
             self.groups_show(key.clone())?;
             // check if group user already exists
-            let caller: AccountId = Self::env().caller();
-            if self.group_users.get((key.clone(), caller)).is_some() {
+            let user: AccountId = Self::env().caller();
+            if self.group_users.get((key.clone(), user)).is_some() {
                 return Err(AZGroupsError::UnprocessableEntity(
                     "Group user has already been taken".to_string(),
                 ));
@@ -96,12 +99,12 @@ mod az_groups {
 
             // Create and set group user
             let group_user: GroupUser = GroupUser { role: 1 };
-            self.group_users.insert((key.clone(), caller), &group_user);
+            self.group_users.insert((key.clone(), user), &group_user);
 
             // emit event
             self.env().emit_event(GroupUserCreate {
-                group_name: name,
-                user: caller,
+                group_name,
+                user,
                 role: group_user.role,
             });
 
@@ -115,10 +118,10 @@ mod az_groups {
         // The only way a super admin can leave the group is to be kicked by another super admin        #[ink(message)]
         pub fn group_users_destroy(
             &mut self,
-            name: String,
+            group_name: String,
             user: AccountId,
         ) -> Result<(), AZGroupsError> {
-            let key: String = name.to_lowercase();
+            let key: String = group_name.to_lowercase();
             let caller: AccountId = Self::env().caller();
             let caller_group_user: GroupUser = self.group_users_show(key.clone(), caller)?;
             let user_group_user: GroupUser = self.group_users_show(key.clone(), user)?;
@@ -134,10 +137,7 @@ mod az_groups {
             self.group_users.remove((key.clone(), user));
 
             // emit event
-            self.env().emit_event(GroupUserDestroy {
-                group_name: name,
-                user,
-            });
+            self.env().emit_event(GroupUserDestroy { group_name, user });
 
             Ok(())
         }
@@ -145,10 +145,10 @@ mod az_groups {
         #[ink(message)]
         pub fn group_users_show(
             &self,
-            name: String,
+            group_name: String,
             user: AccountId,
         ) -> Result<GroupUser, AZGroupsError> {
-            if let Some(group_user) = self.group_users.get((name.to_lowercase(), user)) {
+            if let Some(group_user) = self.group_users.get((group_name.to_lowercase(), user)) {
                 Ok(group_user)
             } else {
                 Err(AZGroupsError::NotFound("GroupUser".to_string()))
@@ -158,7 +158,7 @@ mod az_groups {
         #[ink(message)]
         pub fn group_users_update(
             &mut self,
-            name: String,
+            group_name: String,
             user: AccountId,
             role: u8,
         ) -> Result<GroupUser, AZGroupsError> {
@@ -168,7 +168,7 @@ mod az_groups {
                 ));
             }
             // check if group with key exists
-            let key: String = name.to_lowercase();
+            let key: String = group_name.to_lowercase();
             let caller: AccountId = Self::env().caller();
             if caller == user {
                 return Err(AZGroupsError::Unauthorised);
@@ -192,7 +192,7 @@ mod az_groups {
 
             // emit event
             self.env().emit_event(GroupUserUpdate {
-                group_name: name,
+                group_name,
                 user,
                 role,
             });
@@ -211,7 +211,7 @@ mod az_groups {
                 ));
             }
 
-            let caller: AccountId = Self::env().caller();
+            let user: AccountId = Self::env().caller();
             // Create group
             let group: Group = Group {
                 name: name.clone(),
@@ -221,13 +221,13 @@ mod az_groups {
 
             // Create and set group user
             let group_user: GroupUser = GroupUser { role: 4 };
-            self.group_users.insert((key, caller), &group_user);
+            self.group_users.insert((key, user), &group_user);
 
             // emit event
             self.env().emit_event(GroupCreate { name: name.clone() });
             self.env().emit_event(GroupUserCreate {
                 group_name: name,
-                user: caller,
+                user,
                 role: group_user.role,
             });
 
