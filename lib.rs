@@ -10,6 +10,38 @@ mod az_groups {
         storage::Mapping,
     };
 
+    // === EVENTS ===
+    #[ink(event)]
+    pub struct GroupCreate {
+        name: String,
+    }
+
+    #[ink(event)]
+    pub struct GroupUpdate {
+        name: String,
+        enabled: bool,
+    }
+
+    #[ink(event)]
+    pub struct GroupUserCreate {
+        group_name: String,
+        user: AccountId,
+        role: u8,
+    }
+
+    #[ink(event)]
+    pub struct GroupUserDestroy {
+        group_name: String,
+        user: AccountId,
+    }
+
+    #[ink(event)]
+    pub struct GroupUserUpdate {
+        group_name: String,
+        user: AccountId,
+        role: u8,
+    }
+
     // === STRUCTS ===
     #[derive(scale::Decode, scale::Encode, Debug, Clone, PartialEq)]
     #[cfg_attr(
@@ -66,6 +98,13 @@ mod az_groups {
             let group_user: GroupUser = GroupUser { role: 1 };
             self.group_users.insert((key.clone(), caller), &group_user);
 
+            // emit event
+            self.env().emit_event(GroupUserCreate {
+                group_name: name,
+                user: caller,
+                role: group_user.role,
+            });
+
             Ok(group_user)
         }
 
@@ -94,7 +133,26 @@ mod az_groups {
             }
             self.group_users.remove((key.clone(), user));
 
+            // emit event
+            self.env().emit_event(GroupUserDestroy {
+                group_name: name,
+                user,
+            });
+
             Ok(())
+        }
+
+        #[ink(message)]
+        pub fn group_users_show(
+            &self,
+            name: String,
+            user: AccountId,
+        ) -> Result<GroupUser, AZGroupsError> {
+            if let Some(group_user) = self.group_users.get((name.to_lowercase(), user)) {
+                Ok(group_user)
+            } else {
+                Err(AZGroupsError::NotFound("GroupUser".to_string()))
+            }
         }
 
         #[ink(message)]
@@ -132,20 +190,14 @@ mod az_groups {
             self.group_users
                 .insert((key.clone(), user), &user_group_user);
 
-            Ok(user_group_user)
-        }
+            // emit event
+            self.env().emit_event(GroupUserUpdate {
+                group_name: name,
+                user,
+                role,
+            });
 
-        #[ink(message)]
-        pub fn group_users_show(
-            &self,
-            name: String,
-            user: AccountId,
-        ) -> Result<GroupUser, AZGroupsError> {
-            if let Some(group_user) = self.group_users.get((name.to_lowercase(), user)) {
-                Ok(group_user)
-            } else {
-                Err(AZGroupsError::NotFound("GroupUser".to_string()))
-            }
+            Ok(user_group_user)
         }
 
         #[ink(message)]
@@ -159,6 +211,7 @@ mod az_groups {
                 ));
             }
 
+            let caller: AccountId = Self::env().caller();
             // Create group
             let group: Group = Group {
                 name: name.clone(),
@@ -168,8 +221,15 @@ mod az_groups {
 
             // Create and set group user
             let group_user: GroupUser = GroupUser { role: 4 };
-            self.group_users
-                .insert((key, Self::env().caller()), &group_user);
+            self.group_users.insert((key, caller), &group_user);
+
+            // emit event
+            self.env().emit_event(GroupCreate { name: name.clone() });
+            self.env().emit_event(GroupUserCreate {
+                group_name: name,
+                user: caller,
+                role: group_user.role,
+            });
 
             Ok(group)
         }
@@ -210,6 +270,12 @@ mod az_groups {
                 group.enabled = enabled_unwrapped
             }
             self.groups.insert(group.name.to_lowercase(), &group);
+
+            // emit event
+            self.env().emit_event(GroupUpdate {
+                name: group.name.clone(),
+                enabled: group.enabled,
+            });
 
             Ok(group)
         }
