@@ -501,7 +501,8 @@ mod az_groups {
             assert_eq!(group_user.role, 4);
             // * it sets the group_id_by_name
             assert_eq!(az_groups.group_id_by_name.get(key.clone()).unwrap(), 0);
-
+            // * it increases the groups total by one
+            assert_eq!(az_groups.groups_total, 1);
             // when group with key already exists
             // * it raises an error
             result = az_groups.groups_create(key);
