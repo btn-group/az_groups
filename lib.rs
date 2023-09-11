@@ -182,6 +182,37 @@ mod az_groups {
                 Err(AZGroupsError::NotFound("Group".to_string()))
             }
         }
+
+        #[ink(message)]
+        pub fn groups_update(
+            &mut self,
+            name: String,
+            new_name: Option<String>,
+            enabled: Option<bool>,
+        ) -> Result<Group, AZGroupsError> {
+            let mut group: Group = self.groups_show(name.clone())?;
+            let caller: AccountId = Self::env().caller();
+            let caller_group_user: GroupUser = self.group_users_show(name, caller)?;
+            if caller_group_user.role < 4 {
+                return Err(AZGroupsError::Unauthorised);
+            }
+
+            if let Some(new_name_unwrapped) = new_name {
+                if self.groups.get(new_name_unwrapped.to_lowercase()).is_some() {
+                    return Err(AZGroupsError::UnprocessableEntity(
+                        "Group has already been taken".to_string(),
+                    ));
+                }
+
+                group.name = new_name_unwrapped
+            }
+            if let Some(enabled_unwrapped) = enabled {
+                group.enabled = enabled_unwrapped
+            }
+            self.groups.insert(group.name.to_lowercase(), &group);
+
+            Ok(group)
+        }
     }
 
     #[cfg(test)]
@@ -406,6 +437,56 @@ mod az_groups {
             // when group with key already exists
             // * it raises an error
             result = az_groups.groups_create(key);
+            assert_eq!(
+                result,
+                Err(AZGroupsError::UnprocessableEntity(
+                    "Group has already been taken".to_string()
+                ))
+            );
+        }
+
+        #[ink::test]
+        fn test_groups_update() {
+            let (accounts, mut az_groups) = init();
+            let group_name: String = MOCK_GROUP_NAME.to_string();
+            let key: String = group_name.to_lowercase();
+            // when group with key does not exist
+            // * it raises an error
+            let mut result = az_groups.groups_update(key.clone(), None, None);
+            assert_eq!(result, Err(AZGroupsError::NotFound("Group".to_string())));
+            // when group with key exists
+            az_groups.groups_create(group_name.clone()).unwrap();
+            // = when caller is not part of group
+            ink::env::test::set_caller::<ink::env::DefaultEnvironment>(accounts.charlie);
+            // = * it raises an error
+            result = az_groups.groups_update(key.clone(), None, None);
+            assert_eq!(
+                result,
+                Err(AZGroupsError::NotFound("GroupUser".to_string()))
+            );
+            // = when caller is part of group
+            az_groups.group_users_create(key.clone()).unwrap();
+            // == when caller is not a super admin
+            // == * it raises an error
+            result = az_groups.groups_update(key.clone(), None, None);
+            assert_eq!(result, Err(AZGroupsError::Unauthorised));
+            // == when caller is a super admin
+            ink::env::test::set_caller::<ink::env::DefaultEnvironment>(accounts.bob);
+            // === when new_name is present
+            // ==== when new_name is available
+            // ==== * it updates the group
+            let new_name: String = "King Kong".to_string();
+            result = az_groups.groups_update(key.clone(), Some(new_name.clone()), Some(false));
+            assert_eq!(
+                result.unwrap(),
+                Group {
+                    name: new_name.clone(),
+                    enabled: false
+                }
+            );
+            // ==== when new_name is taken
+            result = az_groups.groups_update(key.clone(), Some(new_name.clone()), Some(false));
+            // ==== * it raises an error
             assert_eq!(
                 result,
                 Err(AZGroupsError::UnprocessableEntity(
