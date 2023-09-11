@@ -69,6 +69,34 @@ mod az_groups {
             Ok(group_user)
         }
 
+        // User can leave the group, as long as they aren't a super admin
+        // Use can be kicked by an admin or super-admin, as long as they are of the same role level
+        // You should be able to destroy your own as long as you aren't a super admin
+        // This is because if a super admin kicks themselves, there's a chance that the group would be left without one
+        // The only way a super admin can leave the group is to be kicked by another super admin        #[ink(message)]
+        pub fn group_users_destroy(
+            &mut self,
+            name: String,
+            user: AccountId,
+        ) -> Result<(), AZGroupsError> {
+            let key: String = name.to_lowercase();
+            let caller: AccountId = Self::env().caller();
+            let caller_group_user: GroupUser = self.group_users_show(key.clone(), caller)?;
+            let user_group_user: GroupUser = self.group_users_show(key.clone(), user)?;
+            if caller == user {
+                if caller_group_user.role == 4 {
+                    return Err(AZGroupsError::Unauthorised);
+                }
+            } else {
+                if caller_group_user.role < 3 || caller_group_user.role < user_group_user.role {
+                    return Err(AZGroupsError::Unauthorised);
+                }
+            }
+            self.group_users.remove((key.clone(), user));
+
+            Ok(())
+        }
+
         #[ink(message)]
         pub fn group_users_update(
             &mut self,
@@ -161,6 +189,9 @@ mod az_groups {
         use super::*;
         use ink::env::{test::DefaultAccounts, DefaultEnvironment};
 
+        // === CONSTANTS ===
+        const MOCK_GROUP_NAME: &str = "The Next Wave";
+
         // === HELPERS ===
         fn init() -> (DefaultAccounts<DefaultEnvironment>, AZGroups) {
             let accounts = ink::env::test::default_accounts::<ink::env::DefaultEnvironment>();
@@ -173,7 +204,7 @@ mod az_groups {
         #[ink::test]
         fn test_group_users_create() {
             let (accounts, mut az_groups) = init();
-            let group_name: String = "The Next Wave".to_string();
+            let group_name: String = MOCK_GROUP_NAME.to_string();
             let key: String = group_name.to_lowercase();
             // when group with key does not exist
             // * it raises an error
@@ -198,9 +229,81 @@ mod az_groups {
         }
 
         #[ink::test]
+        fn test_group_users_destroy() {
+            let (accounts, mut az_groups) = init();
+            let group_name: String = MOCK_GROUP_NAME.to_string();
+            //  when group with key exists
+            az_groups.groups_create(group_name.clone()).unwrap();
+            // = when caller does not have a group user for team
+            ink::env::test::set_caller::<ink::env::DefaultEnvironment>(accounts.charlie);
+            let mut result = az_groups.group_users_destroy(group_name.clone(), accounts.bob);
+            // = * it raises an error
+            assert_eq!(
+                result,
+                Err(AZGroupsError::NotFound("GroupUser".to_string()))
+            );
+            // = when caller has a group user for team
+            ink::env::test::set_caller::<ink::env::DefaultEnvironment>(accounts.bob);
+            // == when user does not have a group user for team
+            result = az_groups.group_users_destroy(group_name.clone(), accounts.charlie);
+            // == * it raises an error
+            assert_eq!(
+                result,
+                Err(AZGroupsError::NotFound("GroupUser".to_string()))
+            );
+            // == when user has a group user for team
+            // === when caller equals user
+            // ==== when role is super admin
+            // ==== * it raises an error
+            result = az_groups.group_users_destroy(group_name.clone(), accounts.bob);
+            assert_eq!(result, Err(AZGroupsError::Unauthorised));
+            // ==== when role is not super admin
+            ink::env::test::set_caller::<ink::env::DefaultEnvironment>(accounts.charlie);
+
+            az_groups.group_users_create(group_name.clone()).unwrap();
+            // ==== * it destroys UserGroup
+            az_groups
+                .group_users_destroy(group_name.clone(), accounts.charlie)
+                .unwrap();
+            assert!(az_groups
+                .group_users
+                .get((group_name.clone(), accounts.bob))
+                .is_none());
+            // === when caller does not equal user
+            // ==== when caller role is less than 3 (less than admin)
+            az_groups.group_users_create(group_name.clone()).unwrap();
+            // ==== * it raises an error
+            result = az_groups.group_users_destroy(group_name.clone(), accounts.bob);
+            assert_eq!(result, Err(AZGroupsError::Unauthorised));
+            // ==== when caller role is greater than or equal to 3
+            ink::env::test::set_caller::<ink::env::DefaultEnvironment>(accounts.bob);
+            az_groups
+                .group_users_update(group_name.clone(), accounts.charlie, 3)
+                .unwrap();
+            // ===== when caller's role is less than user's role
+            ink::env::test::set_caller::<ink::env::DefaultEnvironment>(accounts.charlie);
+            // ===== * it raises an error
+            result = az_groups.group_users_destroy(group_name.clone(), accounts.bob);
+            assert_eq!(result, Err(AZGroupsError::Unauthorised));
+            // ===== when caller's role is greater than or equal to user's role
+            ink::env::test::set_caller::<ink::env::DefaultEnvironment>(accounts.bob);
+            az_groups
+                .group_users_update(group_name.clone(), accounts.charlie, 4)
+                .unwrap();
+            // ===== * it destroys UserGroup
+            az_groups
+                .group_users_destroy(group_name.clone(), accounts.charlie)
+                .unwrap();
+            assert!(az_groups
+                .group_users
+                .get((group_name.clone(), accounts.charlie))
+                .is_none());
+        }
+
+        #[ink::test]
         fn test_group_users_update() {
             let (accounts, mut az_groups) = init();
-            let group_name: String = "The Next Wave".to_string();
+            let group_name: String = MOCK_GROUP_NAME.to_string();
             // when role is greater than 4
             // * it raises an error
             let mut result = az_groups.group_users_update(group_name.clone(), accounts.alice, 5);
@@ -283,7 +386,7 @@ mod az_groups {
         #[ink::test]
         fn test_groups_create() {
             let (accounts, mut az_groups) = init();
-            let group_name: String = "The Next Wave".to_string();
+            let group_name: String = MOCK_GROUP_NAME.to_string();
             let key: String = group_name.to_lowercase();
             // when group with key does not exist
             // * it creates the group with the supplied name
