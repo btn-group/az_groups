@@ -27,6 +27,8 @@
 <!-- ABOUT THE PROJECT -->
 ## About The Project
 
+A smart contract that allows the decentralised management of groups. Built for the Aleph Zero blockchain, it's initial purpose is to use with a decentralised smart contract hub. The idea is to increase trust for users, by being able to associate an address with a group e.g. an upload by an address that is part of the Aleph Zero Foundation group, will be more trustable than a random address.
+
 <p align="right">(<a href="#top">back to top</a>)</p>
 
 ### Built With
@@ -34,7 +36,6 @@
 * [Cargo](https://doc.rust-lang.org/cargo/)
 * [Rust](https://www.rust-lang.org/)
 * [ink!](https://use.ink/)
-* [OpenBrush](https://openbrush.io/)
 * [Cargo Contract v2.0.1](https://github.com/paritytech/cargo-contract)
 ```zsh
 cargo install --force --locked cargo-contract --version 2.0.1
