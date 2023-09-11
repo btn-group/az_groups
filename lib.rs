@@ -201,6 +201,12 @@ mod az_groups {
 
         #[ink(message)]
         pub fn groups_create(&mut self, name: String) -> Result<Group, AZGroupsError> {
+            let formatted_name: String = name.trim().to_string();
+            if formatted_name.is_empty() {
+                return Err(AZGroupsError::UnprocessableEntity(
+                    "Name can't be blank".to_string(),
+                ));
+            };
             if self.groups_total == u32::MAX {
                 return Err(AZGroupsError::UnprocessableEntity(
                     "Group limit reached".to_string(),
@@ -208,7 +214,7 @@ mod az_groups {
             }
             // key will be name lowercased
             // check if group with key already exists
-            let key: String = name.to_lowercase();
+            let key: String = formatted_name.to_lowercase();
             if self.group_id_by_name.get(key.clone()).is_some() {
                 return Err(AZGroupsError::UnprocessableEntity(
                     "Group has already been taken".to_string(),
@@ -219,7 +225,7 @@ mod az_groups {
             // Create group
             let group: Group = Group {
                 id: self.groups_total,
-                name: name.clone(),
+                name: formatted_name.clone(),
                 enabled: true,
             };
             self.groups.insert(group.id, &group);
@@ -237,7 +243,7 @@ mod az_groups {
             // emit event
             self.env().emit_event(GroupCreate {
                 id: group.id,
-                name: name.clone(),
+                name: formatted_name.clone(),
             });
             self.env().emit_event(GroupUserCreate {
                 group_id: group.id,
@@ -271,7 +277,14 @@ mod az_groups {
                 return Err(AZGroupsError::Unauthorised);
             }
 
-            if let Some(new_name_unwrapped) = new_name {
+            if let Some(mut new_name_unwrapped) = new_name {
+                new_name_unwrapped = new_name_unwrapped.trim().to_string();
+                if new_name_unwrapped.is_empty() {
+                    return Err(AZGroupsError::UnprocessableEntity(
+                        "Name can't be blank".to_string(),
+                    ));
+                };
+
                 let new_key: String = new_name_unwrapped.to_lowercase();
                 let old_key: String = group.name.to_lowercase();
                 if new_key != old_key && self.group_id_by_name.get(new_key.clone()).is_some() {
@@ -522,6 +535,15 @@ mod az_groups {
                     "Group limit reached".to_string()
                 ))
             );
+            // when group_name is blank
+            // * it raises an error
+            result = az_groups.groups_create(" ".to_string());
+            assert_eq!(
+                result,
+                Err(AZGroupsError::UnprocessableEntity(
+                    "Name can't be blank".to_string()
+                ))
+            );
         }
 
         #[ink::test]
@@ -552,6 +574,15 @@ mod az_groups {
             // == when caller is a super admin
             ink::env::test::set_caller::<ink::env::DefaultEnvironment>(accounts.bob);
             // === when new_name is present
+            // ==== when new_name is empty blank
+            // ==== * it raises an error
+            result = az_groups.groups_update(0, Some(" ".to_string()), Some(false));
+            assert_eq!(
+                result,
+                Err(AZGroupsError::UnprocessableEntity(
+                    "Name can't be blank".to_string()
+                ))
+            );
             // ==== when new_name is available
             // ==== * it updates the group
             let mut new_name: String = "King Kong".to_string();
@@ -576,14 +607,14 @@ mod az_groups {
             );
             // ==== when new_name is taken
             // ===== when new_name's key is the same as the original key
-            new_name = new_name.to_uppercase();
+            new_name = new_name.to_uppercase() + " ";
             result = az_groups.groups_update(0, Some(new_name.clone()), Some(true));
             // ===== * it updates
             assert_eq!(
                 result.unwrap(),
                 Group {
                     id: 0,
-                    name: new_name,
+                    name: new_name.trim().to_string(),
                     enabled: true
                 }
             );
