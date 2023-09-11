@@ -272,20 +272,18 @@ mod az_groups {
             }
 
             if let Some(new_name_unwrapped) = new_name {
-                if self
-                    .group_id_by_name
-                    .get(new_name_unwrapped.to_lowercase())
-                    .is_some()
-                {
+                let new_key: String = new_name_unwrapped.to_lowercase();
+                let old_key: String = group.name.to_lowercase();
+                if new_key != old_key && self.group_id_by_name.get(new_key.clone()).is_some() {
                     return Err(AZGroupsError::UnprocessableEntity(
                         "Group has already been taken".to_string(),
                     ));
                 }
 
                 // remove old mapping
-                self.group_id_by_name.remove(group.name.to_lowercase());
+                self.group_id_by_name.remove(old_key);
                 group.name = new_name_unwrapped;
-                self.group_id_by_name.insert(group.name.to_lowercase(), &id);
+                self.group_id_by_name.insert(new_key, &id);
             }
             if let Some(enabled_unwrapped) = enabled {
                 group.enabled = enabled_unwrapped
@@ -545,7 +543,7 @@ mod az_groups {
             // === when new_name is present
             // ==== when new_name is available
             // ==== * it updates the group
-            let new_name: String = "King Kong".to_string();
+            let mut new_name: String = "King Kong".to_string();
             result = az_groups.groups_update(0, Some(new_name.clone()), Some(false));
             assert_eq!(
                 result.unwrap(),
@@ -566,8 +564,22 @@ mod az_groups {
                 0
             );
             // ==== when new_name is taken
-            result = az_groups.groups_update(0, Some(new_name.clone()), Some(false));
-            // ==== * it raises an error
+            // ===== when new_name's key is the same as the original key
+            new_name = new_name.to_uppercase();
+            result = az_groups.groups_update(0, Some(new_name.clone()), Some(true));
+            // ===== * it updates
+            assert_eq!(
+                result.unwrap(),
+                Group {
+                    id: 0,
+                    name: new_name,
+                    enabled: true
+                }
+            );
+            // ===== when new_name's key is different from the original key
+            az_groups.group_id_by_name.insert("a".to_string(), &1);
+            result = az_groups.groups_update(0, Some("A".to_string()), Some(true));
+            // ===== * it raises an error
             assert_eq!(
                 result,
                 Err(AZGroupsError::UnprocessableEntity(
