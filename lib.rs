@@ -12,13 +12,13 @@ mod az_groups {
 
     // === EVENTS ===
     #[ink(event)]
-    pub struct GroupCreate {
+    pub struct Create {
         id: u32,
         name: String,
     }
 
     #[ink(event)]
-    pub struct GroupUpdate {
+    pub struct Update {
         id: u32,
         name: String,
         enabled: bool,
@@ -77,6 +77,11 @@ mod az_groups {
         groups_total: u32,
         group_users: Mapping<(u32, AccountId), GroupUser>,
     }
+    impl Default for AZGroups {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
     impl AZGroups {
         #[ink(constructor)]
         pub fn new() -> Self {
@@ -131,10 +136,8 @@ mod az_groups {
                 if caller_group_user.role == 4 {
                     return Err(AZGroupsError::Unauthorised);
                 }
-            } else {
-                if caller_group_user.role < 3 || caller_group_user.role < user_group_user.role {
-                    return Err(AZGroupsError::Unauthorised);
-                }
+            } else if caller_group_user.role < 3 || caller_group_user.role < user_group_user.role {
+                return Err(AZGroupsError::Unauthorised);
             }
             self.group_users.remove((group_id, user));
 
@@ -241,9 +244,9 @@ mod az_groups {
             self.groups_total += 1;
 
             // emit event
-            self.env().emit_event(GroupCreate {
+            self.env().emit_event(Create {
                 id: group.id,
-                name: formatted_name.clone(),
+                name: formatted_name,
             });
             self.env().emit_event(GroupUserCreate {
                 group_id: group.id,
@@ -278,7 +281,7 @@ mod az_groups {
             }
 
             if let Some(mut new_name_unwrapped) = new_name {
-                new_name_unwrapped = new_name_unwrapped.trim().to_string();
+                new_name_unwrapped = AZGroups::format_group_name(new_name_unwrapped);
                 if new_name_unwrapped.is_empty() {
                     return Err(AZGroupsError::UnprocessableEntity(
                         "Name can't be blank".to_string(),
@@ -304,13 +307,17 @@ mod az_groups {
             self.groups.insert(id, &group);
 
             // emit event
-            self.env().emit_event(GroupUpdate {
+            self.env().emit_event(Update {
                 id,
                 name: group.name.clone(),
                 enabled: group.enabled,
             });
 
             Ok(group)
+        }
+
+        fn format_group_name(name: String) -> String {
+            name.trim().to_string()
         }
     }
 
@@ -614,7 +621,7 @@ mod az_groups {
                 result.unwrap(),
                 Group {
                     id: 0,
-                    name: new_name.trim().to_string(),
+                    name: AZGroups::format_group_name(new_name),
                     enabled: true
                 }
             );
