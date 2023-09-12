@@ -119,11 +119,10 @@ mod az_groups {
             Ok(group_user)
         }
 
-        // User can leave the group, as long as they aren't a super admin
-        // Use can be kicked by an admin or super-admin, as long as they are of the same role level
-        // You should be able to destroy your own as long as you aren't a super admin
-        // This is because if a super admin kicks themselves, there's a chance that the group would be left without one
-        // The only way a super admin can leave the group is to be kicked by another super admin
+        // User can leave the group, as long as they aren't a super admin or banned.
+        // Super admins can't kick themselves because there's a chance that the group would be left without one.
+        // The only way a super admin can leave the group is to be kicked by another super admin.
+        // User can be kicked by an admin or super-admin, as long as they are of the same role level or less.
         #[ink(message)]
         pub fn group_users_destroy(
             &mut self,
@@ -134,7 +133,7 @@ mod az_groups {
             let caller_group_user: GroupUser = self.group_users_show(group_id, caller)?;
             let user_group_user: GroupUser = self.group_users_show(group_id, user)?;
             if caller == user {
-                if caller_group_user.role == 4 {
+                if caller_group_user.role == 4 || caller_group_user.role == 0 {
                     return Err(AZGroupsError::Unauthorised);
                 }
             } else if caller_group_user.role < 3 || caller_group_user.role < user_group_user.role {
@@ -402,14 +401,23 @@ mod az_groups {
             assert_eq!(result, Err(AZGroupsError::Unauthorised));
             // ==== when role is not super admin
             ink::env::test::set_caller::<ink::env::DefaultEnvironment>(accounts.charlie);
-
+            // ===== when role is not banned
             az_groups.group_users_create(0).unwrap();
-            // ==== * it destroys UserGroup
+            // ===== * it destroys UserGroup
             az_groups.group_users_destroy(0, accounts.charlie).unwrap();
             assert!(az_groups.group_users.get((0, accounts.charlie)).is_none());
+            // ===== when role is banned
+            az_groups.group_users_create(0).unwrap();
+            ink::env::test::set_caller::<ink::env::DefaultEnvironment>(accounts.bob);
+            az_groups
+                .group_users_update(0, accounts.charlie, 0)
+                .unwrap();
+            ink::env::test::set_caller::<ink::env::DefaultEnvironment>(accounts.charlie);
+            // ===== * it raises an error
+            result = az_groups.group_users_destroy(0, accounts.charlie);
+            assert_eq!(result, Err(AZGroupsError::Unauthorised));
             // === when caller does not equal user
             // ==== when caller role is less than 3 (less than admin)
-            az_groups.group_users_create(0).unwrap();
             // ==== * it raises an error
             result = az_groups.group_users_destroy(0, accounts.bob);
             assert_eq!(result, Err(AZGroupsError::Unauthorised));
