@@ -205,11 +205,7 @@ mod az_groups {
         #[ink(message)]
         pub fn groups_create(&mut self, name: String) -> Result<Group, AZGroupsError> {
             let formatted_name: String = name.trim().to_string();
-            if formatted_name.is_empty() {
-                return Err(AZGroupsError::UnprocessableEntity(
-                    "Name can't be blank".to_string(),
-                ));
-            };
+            AZGroups::validate_group_name_presence(formatted_name.clone())?;
             if self.groups_total == u32::MAX {
                 return Err(AZGroupsError::UnprocessableEntity(
                     "Group limit reached".to_string(),
@@ -278,11 +274,7 @@ mod az_groups {
 
             if let Some(mut new_name_unwrapped) = new_name {
                 new_name_unwrapped = AZGroups::format_group_name(new_name_unwrapped);
-                if new_name_unwrapped.is_empty() {
-                    return Err(AZGroupsError::UnprocessableEntity(
-                        "Name can't be blank".to_string(),
-                    ));
-                };
+                AZGroups::validate_group_name_presence(new_name_unwrapped.clone())?;
 
                 let new_key: String = new_name_unwrapped.to_lowercase();
                 let old_key: String = group.name.to_lowercase();
@@ -312,6 +304,16 @@ mod az_groups {
 
         fn format_group_name(name: String) -> String {
             name.trim().to_string()
+        }
+
+        fn validate_group_name_presence(name: String) -> Result<(), AZGroupsError> {
+            if name.is_empty() {
+                return Err(AZGroupsError::UnprocessableEntity(
+                    "Name can't be blank".to_string(),
+                ));
+            };
+
+            Ok(())
         }
 
         fn validate_group_name_uniqueness(&self, key: String) -> Result<(), AZGroupsError> {
