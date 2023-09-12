@@ -218,11 +218,7 @@ mod az_groups {
             // key will be name lowercased
             // check if group with key already exists
             let key: String = formatted_name.to_lowercase();
-            if self.group_id_by_name.get(key.clone()).is_some() {
-                return Err(AZGroupsError::UnprocessableEntity(
-                    "Group has already been taken".to_string(),
-                ));
-            }
+            self.validate_group_name_uniqueness(key.clone())?;
 
             let user: AccountId = Self::env().caller();
             // Create group
@@ -290,10 +286,8 @@ mod az_groups {
 
                 let new_key: String = new_name_unwrapped.to_lowercase();
                 let old_key: String = group.name.to_lowercase();
-                if new_key != old_key && self.group_id_by_name.get(new_key.clone()).is_some() {
-                    return Err(AZGroupsError::UnprocessableEntity(
-                        "Group has already been taken".to_string(),
-                    ));
+                if new_key != old_key {
+                    self.validate_group_name_uniqueness(new_key.clone())?
                 }
 
                 // remove old mapping
@@ -318,6 +312,16 @@ mod az_groups {
 
         fn format_group_name(name: String) -> String {
             name.trim().to_string()
+        }
+
+        fn validate_group_name_uniqueness(&self, key: String) -> Result<(), AZGroupsError> {
+            if self.group_id_by_name.get(key).is_some() {
+                return Err(AZGroupsError::UnprocessableEntity(
+                    "Group has already been taken".to_string(),
+                ));
+            }
+
+            Ok(())
         }
     }
 
