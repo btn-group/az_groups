@@ -123,7 +123,8 @@ mod az_groups {
         // Use can be kicked by an admin or super-admin, as long as they are of the same role level
         // You should be able to destroy your own as long as you aren't a super admin
         // This is because if a super admin kicks themselves, there's a chance that the group would be left without one
-        // The only way a super admin can leave the group is to be kicked by another super admin        #[ink(message)]
+        // The only way a super admin can leave the group is to be kicked by another super admin
+        #[ink(message)]
         pub fn group_users_destroy(
             &mut self,
             group_id: u32,
