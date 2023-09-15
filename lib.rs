@@ -13,12 +13,14 @@ mod az_groups {
     // === EVENTS ===
     #[ink(event)]
     pub struct Create {
+        #[ink(topic)]
         id: u32,
         name: String,
     }
 
     #[ink(event)]
     pub struct Update {
+        #[ink(topic)]
         id: u32,
         name: String,
         enabled: bool,
@@ -26,20 +28,26 @@ mod az_groups {
 
     #[ink(event)]
     pub struct GroupUserCreate {
+        #[ink(topic)]
         group_id: u32,
+        #[ink(topic)]
         user: AccountId,
         role: u8,
     }
 
     #[ink(event)]
     pub struct GroupUserDestroy {
+        #[ink(topic)]
         group_id: u32,
+        #[ink(topic)]
         user: AccountId,
     }
 
     #[ink(event)]
     pub struct GroupUserUpdate {
+        #[ink(topic)]
         group_id: u32,
+        #[ink(topic)]
         user: AccountId,
         role: u8,
     }
