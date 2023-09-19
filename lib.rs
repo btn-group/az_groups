@@ -262,8 +262,8 @@ mod az_groups {
         pub fn groups_update(
             &mut self,
             id: u32,
-            new_name: Option<String>,
-            enabled: Option<bool>,
+            name: String,
+            enabled: bool,
         ) -> Result<Group, AZGroupsError> {
             let mut group: Group = self.groups_show(id)?;
             let caller: AccountId = Self::env().caller();
@@ -272,11 +272,11 @@ mod az_groups {
                 return Err(AZGroupsError::Unauthorised);
             }
 
-            if let Some(mut new_name_unwrapped) = new_name {
-                new_name_unwrapped = AZGroups::format_group_name(new_name_unwrapped);
-                AZGroups::validate_group_name_presence(new_name_unwrapped.clone())?;
+            if group.name != name {
+                let name_formatted = AZGroups::format_group_name(name);
+                AZGroups::validate_group_name_presence(name_formatted.clone())?;
 
-                let new_key: String = new_name_unwrapped.to_lowercase();
+                let new_key: String = name_formatted.to_lowercase();
                 let old_key: String = group.name.to_lowercase();
                 if new_key != old_key {
                     self.validate_group_name_uniqueness(new_key.clone())?
@@ -284,12 +284,10 @@ mod az_groups {
 
                 // remove old mapping
                 self.group_id_by_name.remove(old_key);
-                group.name = new_name_unwrapped;
+                group.name = name_formatted;
                 self.group_id_by_name.insert(new_key, &id);
             }
-            if let Some(enabled_unwrapped) = enabled {
-                group.enabled = enabled_unwrapped
-            }
+            group.enabled = enabled;
             self.groups.insert(id, &group);
 
             // emit event
@@ -575,14 +573,14 @@ mod az_groups {
             let key: String = group_name.to_lowercase();
             // when group with key does not exist
             // * it raises an error
-            let mut result = az_groups.groups_update(0, None, None);
+            let mut result = az_groups.groups_update(0, group_name.clone(), true);
             assert_eq!(result, Err(AZGroupsError::NotFound("Group".to_string())));
             // when group with key exists
             az_groups.groups_create(group_name.clone()).unwrap();
             // = when caller is not part of group
             ink::env::test::set_caller::<ink::env::DefaultEnvironment>(accounts.charlie);
             // = * it raises an error
-            result = az_groups.groups_update(0, None, None);
+            result = az_groups.groups_update(0, group_name.clone(), true);
             assert_eq!(
                 result,
                 Err(AZGroupsError::NotFound("GroupUser".to_string()))
@@ -591,14 +589,14 @@ mod az_groups {
             az_groups.group_users_create(0).unwrap();
             // == when caller is not a super admin
             // == * it raises an error
-            result = az_groups.groups_update(0, None, None);
+            result = az_groups.groups_update(0, group_name.clone(), true);
             assert_eq!(result, Err(AZGroupsError::Unauthorised));
             // == when caller is a super admin
             ink::env::test::set_caller::<ink::env::DefaultEnvironment>(accounts.bob);
             // === when new_name is present
             // ==== when new_name is empty blank
             // ==== * it raises an error
-            result = az_groups.groups_update(0, Some(" ".to_string()), Some(false));
+            result = az_groups.groups_update(0, " ".to_string(), false);
             assert_eq!(
                 result,
                 Err(AZGroupsError::UnprocessableEntity(
@@ -608,7 +606,7 @@ mod az_groups {
             // ==== when new_name is available
             // ==== * it updates the group
             let mut new_name: String = "King Kong".to_string();
-            result = az_groups.groups_update(0, Some(new_name.clone()), Some(false));
+            result = az_groups.groups_update(0, new_name.clone(), false);
             assert_eq!(
                 result.unwrap(),
                 Group {
@@ -630,7 +628,7 @@ mod az_groups {
             // ==== when new_name is taken
             // ===== when new_name's key is the same as the original key
             new_name = new_name.to_uppercase() + " ";
-            result = az_groups.groups_update(0, Some(new_name.clone()), Some(true));
+            result = az_groups.groups_update(0, new_name.clone(), true);
             // ===== * it updates
             assert_eq!(
                 result.unwrap(),
@@ -642,7 +640,7 @@ mod az_groups {
             );
             // ===== when new_name's key is different from the original key
             az_groups.group_id_by_name.insert("a".to_string(), &1);
-            result = az_groups.groups_update(0, Some("A".to_string()), Some(true));
+            result = az_groups.groups_update(0, "A".to_string(), true);
             // ===== * it raises an error
             assert_eq!(
                 result,
