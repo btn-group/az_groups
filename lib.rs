@@ -258,6 +258,15 @@ mod az_groups {
         }
 
         #[ink(message)]
+        pub fn groups_find_by_name(&self, name: String) -> Result<Group, AZGroupsError> {
+            if let Some(group_id) = self.group_id_by_name.get(name.to_lowercase()) {
+                self.groups_show(group_id)
+            } else {
+                Err(AZGroupsError::NotFound("Group".to_string()))
+            }
+        }
+
+        #[ink(message)]
         pub fn groups_show(&self, id: u32) -> Result<Group, AZGroupsError> {
             if let Some(group) = self.groups.get(id) {
                 Ok(group)
@@ -572,6 +581,26 @@ mod az_groups {
                     "Name can't be blank".to_string()
                 ))
             );
+        }
+
+        #[ink::test]
+        fn test_groups_find_by_name() {
+            let (_accounts, mut az_groups) = init();
+            let group_name: String = MOCK_GROUP_NAME.to_string();
+            // when group with name does not exist
+            // * it raises an error
+            let mut result = az_groups.groups_find_by_name(group_name.clone());
+            assert_eq!(result, Err(AZGroupsError::NotFound("Group".to_string())));
+            // when group with name exists
+            az_groups.groups_create(group_name.clone()).unwrap();
+            // = when name with no matching key is provided
+            // = * it raises an error
+            result = az_groups.groups_find_by_name("asdf".to_string());
+            assert_eq!(result, Err(AZGroupsError::NotFound("Group".to_string())));
+            // = when name with a matching key is provided (case insensitive)
+            // = * it returns the group
+            result = az_groups.groups_find_by_name(group_name.to_uppercase());
+            assert_eq!(result.unwrap(), az_groups.groups.get(0).unwrap());
         }
 
         #[ink::test]
