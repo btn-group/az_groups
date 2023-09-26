@@ -1,37 +1,56 @@
-<!-- PROJECT LOGO -->
 # AZ Groups
 
-<!-- TABLE OF CONTENTS -->
-<details>
-  <summary>Table of Contents</summary>
-  <ol>
-    <li>
-      <a href="#about-the-project">About The Project</a>
-      <ul>
-        <li><a href="#built-with">Built With</a></li>
-      </ul>
-    </li>
-    <li>
-      <a href="#getting-started">Getting Started</a>
-      <ul>
-        <li><a href="#prerequisites">Prerequisites</a></li>
-        <li><a href="#setting-up-locally">Setting up locally</a></li>
-      </ul>
-    </li>
-    <li>
-      <a href="#references">References</a>
-    </li>
-  </ol>
-</details>
+A smart contract that allows the decentralised management of groups. Built for the Aleph Zero blockchain, it's initial purpose is to use with a decentralised smart contract hub. The idea is to increase trust for users, by being able to associate an address with a group e.g. an upload by an address that is part of the Aleph Zero Foundation group will be more trustable.
 
-<!-- ABOUT THE PROJECT -->
-## About The Project
+### Roles
 
-A smart contract that allows the decentralised management of groups. Built for the Aleph Zero blockchain, it's initial purpose is to use with a decentralised smart contract hub. The idea is to increase trust for users, by being able to associate an address with a group e.g. an upload by an address that is part of the Aleph Zero Foundation group, will be more trustable than a random address.
+0 => Banned
+1 => Applicant
+2 => Member
+3 => Admin
+4 => SuperAdmin
 
-<p align="right">(<a href="#top">back to top</a>)</p>
+### Rules
 
-### Built With
+**Creating a group**:
+* Names must unique (case-insensitive).
+* Names will have whitespace removed from start and end.
+```
+fn groups_create(&mut self, name: String) -> Result<Group, AZGroupsError>
+```
+**Updating a group**:
+* Super admin can change the name and enabled status of the group.
+```
+fn groups_update(&mut self, id: u32, name: String, enabled: bool) -> Result<Group, AZGroupsError>
+```
+**Joining**:
+* Any non-member can apply to join. They can't be invited.
+```
+fn group_users_create(&mut self, group_id: u32) -> Result<GroupUser, AZGroupsError>
+```
+**Kicking**: 
+* Admin and super admin can kick members of the same role or less.
+```
+fn group_users_destroy(&mut self, group_id: u32, user: AccountId) -> Result<(), AZGroupsError>
+```
+**Leaving**:
+* All members except for banned and super admin can leave a group.
+* Super admin can't leave as it may leave a group without a super admin.
+```
+fn group_users_destroy(&mut self, group_id: u32, user: AccountId) -> Result<(), AZGroupsError>
+```
+**Updating roles**:
+* Admin and super admin can update the role of members with the same role or less.
+```
+pub fn group_users_update(&mut self, group_id: u32, user: AccountId, role: u8) -> Result<GroupUser, AZGroupsError>
+```
+
+## Integration
+
+To check if a user is part of a group, you would have to check if the user has valid membership, i.e. the group is enabled and the user has a role in the group that is two or higher.
+
+## Getting Started
+### Prerequisites
 
 * [Cargo](https://doc.rust-lang.org/cargo/)
 * [Rust](https://www.rust-lang.org/)
@@ -41,18 +60,6 @@ A smart contract that allows the decentralised management of groups. Built for t
 cargo install --force --locked cargo-contract --version 2.0.1
 ```
 
-<p align="right">(<a href="#top">back to top</a>)</p>
-
-<!-- GETTING STARTED -->
-## Getting Started
-
-To get a local copy up and running follow these simple example steps.
-
-### Prerequisites
-
-* A pre-requisite for compiling smart contracts is to have a stable Rust version and Cargo installed. Here's an [installation guide](https://doc.rust-lang.org/cargo/getting-started/installation.html).
-* The first tool we will be installing is [cargo-contract](https://github.com/paritytech/cargo-contract), a CLI tool for helping setting up and managing WebAssembly smart contracts written with ink!.
-
 ### Checking code
 
 ```zsh
@@ -60,35 +67,18 @@ cargo checkmate
 cargo sort
 ```
 
-### Building contract
+## Deployment
 
-By default, cargo-contract builds the contract in debug mode. This means that the contract will e.g. print statements like
-
-```sh
-ink::env::debug_println!("magic number: {}", value);
-```
-to the node's console if debugging was enabled on the node ([instructions here](https://use.ink/faq#how-do-i-print-something-to-the-console-from-the-runtime)). To support functionality like this the debug build of a contract includes some heavy-weight logic.
-
-For contracts that are supposed to run in production you should always build the contract with --release:
+1. Build contract:
 ```sh
 cargo contract build --release
 ```
-This will ensure that nothing unnecessary is compiled into the Wasm blob, making your contract faster and cheaper to deploy and execute.
-
-### Setting up locally
-
-The [substrate-contracts-node](https://github.com/paritytech/substrate-contracts-node) is a simple Substrate blockchain which is configured to include the Substrate module for smart contract functionality – the contracts pallet (see [How it Works](https://use.ink/how-it-works) for more). It's a comfortable option if you want to get a quickstart. Download the binary [here](https://github.com/paritytech/substrate-contracts-node/releases).
-
-[After successfully installing substrate-contracts-node](https://use.ink/getting-started/setup#installing-the-substrate-smart-contracts-node), you can start a local development chain by running:
-
+2. If setting up locally, start a local development chain. Download the binary [here](https://github.com/paritytech/substrate-contracts-node/releases), install, then run:
 ```sh
 substrate-contracts-node
 ```
-
-You can interact with your node using the [Contracts UI](https://contracts-ui.substrate.io/). Once you have the webpage open, click on the dropdown selector at the top left corner and choose "Local Node".
-
-Note that blocks are only created when you execute a function in substrate-contracts-node, so trigger a another function first if a function depends on a time delay.
+3. Upload, initialise and interact with contract at [Contracts UI](https://contracts-ui.substrate.io/).
 
 ## References 
 
-- https://substrate.stackexchange.com/questions/3765/contract-storage-needs-nested-orderbooks-best-practice-way-to-structure-dapp/3993
+* https://substrate.stackexchange.com/questions/3765/contract-storage-needs-nested-orderbooks-best-practice-way-to-structure-dapp/3993
