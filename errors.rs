@@ -7,6 +7,7 @@ use ink::{
 #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
 pub enum AZGroupsError {
     ContractCall(LangError),
+    GroupDisabled,
     InkEnvError(String),
     NotFound(String),
     Unauthorised,

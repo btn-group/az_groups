@@ -317,6 +317,27 @@ mod az_groups {
             Ok(group)
         }
 
+        // Convenience method so that other contract can get this info without having to call two functions
+        // 1. Check that the group is enabled
+        // 2. Check that user has a role with the group greater than or equal to two
+        #[ink(message)]
+        pub fn validate_membership(
+            &self,
+            group_id: u32,
+            user: AccountId,
+        ) -> Result<u8, AZGroupsError> {
+            let group: Group = self.groups_show(group_id)?;
+            if !group.enabled {
+                return Err(AZGroupsError::GroupDisabled);
+            }
+            let group_user: GroupUser = self.group_users_show(group_id, user)?;
+            if group_user.role < 2 {
+                return Err(AZGroupsError::Unauthorised);
+            }
+
+            Ok(group_user.role)
+        }
+
         fn format_group_name(name: String) -> String {
             name.trim().to_string()
         }
@@ -685,6 +706,47 @@ mod az_groups {
                     "Group has already been taken".to_string()
                 ))
             );
+        }
+
+        #[ink::test]
+        fn test_validate_membership() {
+            let (accounts, mut az_groups) = init();
+            let group_name: String = MOCK_GROUP_NAME.to_string();
+            // when group with id does not exist
+            // * it raises an error
+            let mut result = az_groups.validate_membership(0, accounts.bob);
+            assert_eq!(result, Err(AZGroupsError::NotFound("Group".to_string())));
+            // when group with id exists
+            let mut group: Group = az_groups.groups_create(group_name).unwrap();
+            // = when group is enabled
+            // == when GroupUser doesn't exist
+            result = az_groups.validate_membership(0, accounts.alice);
+            // = * it raises an error
+            assert_eq!(
+                result,
+                Err(AZGroupsError::NotFound("GroupUser".to_string()))
+            );
+            // == when GroupUser exists
+            // === when GroupUser is a member, admin or super admin
+            // === * it returns the role number
+            az_groups
+                .group_users
+                .insert((0, accounts.bob), &GroupUser { role: 2 });
+            result = az_groups.validate_membership(0, accounts.bob);
+            assert_eq!(result.unwrap(), 2);
+            // === when GroupUser is banned or applicant
+            // === * it raises an error
+            az_groups
+                .group_users
+                .insert((0, accounts.bob), &GroupUser { role: 1 });
+            result = az_groups.validate_membership(0, accounts.bob);
+            assert_eq!(result, Err(AZGroupsError::Unauthorised));
+            // = when group is disabled
+            group.enabled = false;
+            az_groups.groups.insert(0, &group);
+            // = * it raises an error
+            result = az_groups.validate_membership(0, accounts.bob);
+            assert_eq!(result, Err(AZGroupsError::GroupDisabled));
         }
     }
 }

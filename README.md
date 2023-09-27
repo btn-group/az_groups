@@ -4,10 +4,10 @@ A smart contract that allows the decentralised management of groups. Built for t
 
 ### Roles
 
-0 => Banned
-1 => Applicant
-2 => Member
-3 => Admin
+0 => Banned\
+1 => Applicant\
+2 => Member\
+3 => Admin\
 4 => SuperAdmin
 
 ### Rules
