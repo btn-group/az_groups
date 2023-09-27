@@ -47,7 +47,44 @@ pub fn group_users_update(&mut self, group_id: u32, user: AccountId, role: u8) -
 
 ## Integration
 
-To check if a user is part of a group, you would have to check if the user has valid membership, i.e. the group is enabled and the user has a role in the group that is two or higher.
+Please use the group's id where possible as the name can be changed.
+
+### Contract level
+
+To verify a user's membership, you would have to check that the group is enabled and that the user has a role >= 2. This can be done through:
+```
+pub fn validate_membership(&self, group_id: u32, user: AccountId) -> Result<u8, AZGroupsError>
+```
+
+Here is an example of a cross contract call:
+```
+fn validate_membership(
+    &self,
+    group_id: u32,
+    user: AccountId,
+) -> Result<u8, AZSmartContractHubError> {
+    match cfg!(test) {
+        true => unimplemented!(
+            "`invoke_contract()` not being supported (tests end up panicking)"
+        ),
+        false => {
+            use ink::env::call::{build_call, ExecutionInput, Selector};
+
+            const VALIDATE_MEMBERSHIP_SELECTOR: [u8; 4] =
+                ink::selector_bytes!("validate_membership");
+            Ok(build_call::<Environment>()
+                .call(self.az_groups_address)
+                .exec_input(
+                    ExecutionInput::new(Selector::new(VALIDATE_MEMBERSHIP_SELECTOR))
+                        .push_arg(group_id)
+                        .push_arg(user),
+                )
+                .returns::<core::result::Result<u8, AZGroupsError>>()
+                .invoke()?)
+        }
+    }
+}
+```
 
 ## Getting Started
 ### Prerequisites
