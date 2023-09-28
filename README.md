@@ -4,11 +4,26 @@ A smart contract that allows the decentralised management of groups. Built for t
 
 ### Roles
 
-0 => Banned\
-1 => Applicant\
-2 => Member\
-3 => Admin\
-4 => SuperAdmin
+```
+    pub enum Role {
+        Banned,
+        Applicant,
+        Member,
+        Admin,
+        SuperAdmin,
+    }
+    impl Role {
+        fn to_int(&self) -> u8 {
+            match *self {
+                Role::Banned => 0,
+                Role::Applicant => 1,
+                Role::Member => 2,
+                Role::Admin => 3,
+                Role::SuperAdmin => 4,
+            }
+        }
+    }
+```
 
 ### Rules
 
@@ -42,7 +57,7 @@ fn group_users_destroy(&mut self, group_id: u32, user: AccountId) -> Result<(), 
 **Updating roles**:
 * Admin and super admin can update the role of members with the same role or less.
 ```
-pub fn group_users_update(&mut self, group_id: u32, user: AccountId, role: u8) -> Result<GroupUser, AZGroupsError>
+pub fn group_users_update(&mut self, group_id: u32, user: AccountId, role: Role) -> Result<GroupUser, AZGroupsError>
 ```
 
 ## Integration
@@ -53,7 +68,7 @@ Please use the group's id where possible as the name can be changed.
 
 To verify a user's membership, you would have to check that the group is enabled and that the user has a role >= 2. This can be done through:
 ```
-pub fn validate_membership(&self, group_id: u32, user: AccountId) -> Result<u8, AZGroupsError>
+pub fn validate_membership(&self, group_id: u32, user: AccountId) -> Result<Role, AZGroupsError>
 ```
 
 Here is an example of a cross contract call:
@@ -62,7 +77,7 @@ fn validate_membership(
     &self,
     group_id: u32,
     user: AccountId,
-) -> Result<u8, AZSmartContractHubError> {
+) -> Result<Role, AZSmartContractHubError> {
     match cfg!(test) {
         true => unimplemented!(
             "`invoke_contract()` not being supported (tests end up panicking)"
@@ -79,7 +94,7 @@ fn validate_membership(
                         .push_arg(group_id)
                         .push_arg(user),
                 )
-                .returns::<core::result::Result<u8, AZGroupsError>>()
+                .returns::<core::result::Result<Role, AZGroupsError>>()
                 .invoke()?)
         }
     }
