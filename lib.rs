@@ -357,7 +357,7 @@ mod az_groups {
             }
             let group_user: GroupUser = self.group_users_show(group_id, user)?;
             if group_user.role.to_int() < 2 {
-                return Err(AZGroupsError::Unauthorised);
+                return Err(AZGroupsError::NotAMember);
             }
 
             Ok(group_user.role)
@@ -760,7 +760,7 @@ mod az_groups {
                 },
             );
             result = az_groups.validate_membership(0, accounts.bob);
-            assert_eq!(result, Err(AZGroupsError::Unauthorised));
+            assert_eq!(result, Err(AZGroupsError::NotAMember));
             // = when group is disabled
             group.enabled = false;
             az_groups.groups.insert(0, &group);
