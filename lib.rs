@@ -191,11 +191,9 @@ mod az_groups {
             group_id: u32,
             user: AccountId,
         ) -> Result<GroupUser, AZGroupsError> {
-            if let Some(group_user) = self.group_users.get((group_id, user)) {
-                Ok(group_user)
-            } else {
-                Err(AZGroupsError::NotFound("GroupUser".to_string()))
-            }
+            self.group_users
+                .get((group_id, user))
+                .ok_or(AZGroupsError::NotFound("GroupUser".to_string()))
         }
 
         #[ink(message)]
@@ -297,11 +295,9 @@ mod az_groups {
 
         #[ink(message)]
         pub fn groups_show(&self, id: u32) -> Result<Group, AZGroupsError> {
-            if let Some(group) = self.groups.get(id) {
-                Ok(group)
-            } else {
-                Err(AZGroupsError::NotFound("Group".to_string()))
-            }
+            self.groups
+                .get(id)
+                .ok_or(AZGroupsError::NotFound("Group".to_string()))
         }
 
         #[ink(message)]
