@@ -4,11 +4,26 @@ A smart contract that allows the decentralised management of groups. Built for t
 
 ### Roles
 
-0 => Banned\
-1 => Applicant\
-2 => Member\
-3 => Admin\
-4 => SuperAdmin
+```
+    pub enum Role {
+        Banned,
+        Applicant,
+        Member,
+        Admin,
+        SuperAdmin,
+    }
+    impl Role {
+        fn to_int(&self) -> u8 {
+            match *self {
+                Role::Banned => 0,
+                Role::Applicant => 1,
+                Role::Member => 2,
+                Role::Admin => 3,
+                Role::SuperAdmin => 4,
+            }
+        }
+    }
+```
 
 ### Rules
 

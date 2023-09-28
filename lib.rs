@@ -10,6 +10,31 @@ mod az_groups {
         storage::Mapping,
     };
 
+    // === ENUMS ===
+    #[derive(scale::Decode, scale::Encode, Debug, Clone, PartialEq)]
+    #[cfg_attr(
+        feature = "std",
+        derive(scale_info::TypeInfo, ink::storage::traits::StorageLayout)
+    )]
+    pub enum Role {
+        Banned,
+        Applicant,
+        Member,
+        Admin,
+        SuperAdmin,
+    }
+    impl Role {
+        fn to_int(&self) -> u8 {
+            match *self {
+                Role::Banned => 0,
+                Role::Applicant => 1,
+                Role::Member => 2,
+                Role::Admin => 3,
+                Role::SuperAdmin => 4,
+            }
+        }
+    }
+
     // === EVENTS ===
     #[ink(event)]
     pub struct Create {
@@ -32,7 +57,7 @@ mod az_groups {
         group_id: u32,
         #[ink(topic)]
         user: AccountId,
-        role: u8,
+        role: Role,
     }
 
     #[ink(event)]
@@ -49,7 +74,7 @@ mod az_groups {
         group_id: u32,
         #[ink(topic)]
         user: AccountId,
-        role: u8,
+        role: Role,
     }
 
     // === STRUCTS ===
@@ -75,7 +100,7 @@ mod az_groups {
         derive(scale_info::TypeInfo, ink::storage::traits::StorageLayout)
     )]
     pub struct GroupUser {
-        role: u8,
+        role: Role,
     }
 
     #[ink(storage)]
@@ -114,14 +139,16 @@ mod az_groups {
             }
 
             // Create and set group user
-            let group_user: GroupUser = GroupUser { role: 1 };
+            let group_user: GroupUser = GroupUser {
+                role: Role::Applicant,
+            };
             self.group_users.insert((group_id, user), &group_user);
 
             // emit event
             self.env().emit_event(GroupUserCreate {
                 group_id,
                 user,
-                role: group_user.role,
+                role: group_user.role.clone(),
             });
 
             Ok(group_user)
@@ -140,11 +167,14 @@ mod az_groups {
             let caller: AccountId = Self::env().caller();
             let caller_group_user: GroupUser = self.group_users_show(group_id, caller)?;
             let user_group_user: GroupUser = self.group_users_show(group_id, user)?;
+            let caller_group_user_role_as_int: u8 = caller_group_user.role.to_int();
             if caller == user {
-                if caller_group_user.role == 4 || caller_group_user.role == 0 {
+                if caller_group_user_role_as_int == 4 || caller_group_user_role_as_int == 0 {
                     return Err(AZGroupsError::Unauthorised);
                 }
-            } else if caller_group_user.role < 3 || caller_group_user.role < user_group_user.role {
+            } else if caller_group_user_role_as_int < 3
+                || caller_group_user_role_as_int < user_group_user.role.to_int()
+            {
                 return Err(AZGroupsError::Unauthorised);
             }
             self.group_users.remove((group_id, user));
@@ -173,31 +203,28 @@ mod az_groups {
             &mut self,
             group_id: u32,
             user: AccountId,
-            role: u8,
+            role: Role,
         ) -> Result<GroupUser, AZGroupsError> {
-            if role > 4 {
-                return Err(AZGroupsError::UnprocessableEntity(
-                    "Role must be less than or equal to 4".to_string(),
-                ));
-            }
+            let role_as_int: u8 = role.to_int();
             let caller: AccountId = Self::env().caller();
             if caller == user {
                 return Err(AZGroupsError::Unauthorised);
             }
             let caller_group_user: GroupUser = self.group_users_show(group_id, caller)?;
+            let caller_group_user_as_int: u8 = caller_group_user.role.to_int();
             // Only an admin can make changes
-            if caller_group_user.role < 3 {
+            if caller_group_user_as_int < 3 {
                 return Err(AZGroupsError::Unauthorised);
             }
             let mut user_group_user: GroupUser = self.group_users_show(group_id, user)?;
-            if caller_group_user.role < user_group_user.role {
+            if caller_group_user_as_int < user_group_user.role.to_int() {
                 return Err(AZGroupsError::Unauthorised);
             }
-            if role > caller_group_user.role {
+            if role_as_int > caller_group_user_as_int {
                 return Err(AZGroupsError::Unauthorised);
             }
 
-            user_group_user.role = role;
+            user_group_user.role = role.clone();
             self.group_users.insert((group_id, user), &user_group_user);
 
             // emit event
@@ -237,7 +264,9 @@ mod az_groups {
             self.group_id_by_name.insert(key, &group.id);
 
             // Create and set group user
-            let group_user: GroupUser = GroupUser { role: 4 };
+            let group_user: GroupUser = GroupUser {
+                role: Role::SuperAdmin,
+            };
             self.group_users.insert((group.id, user), &group_user);
 
             // Increase groups_total
@@ -285,7 +314,7 @@ mod az_groups {
             let mut group: Group = self.groups_show(id)?;
             let caller: AccountId = Self::env().caller();
             let caller_group_user: GroupUser = self.group_users_show(id, caller)?;
-            if caller_group_user.role < 4 {
+            if caller_group_user.role != Role::SuperAdmin {
                 return Err(AZGroupsError::Unauthorised);
             }
 
@@ -325,13 +354,13 @@ mod az_groups {
             &self,
             group_id: u32,
             user: AccountId,
-        ) -> Result<u8, AZGroupsError> {
+        ) -> Result<Role, AZGroupsError> {
             let group: Group = self.groups_show(group_id)?;
             if !group.enabled {
                 return Err(AZGroupsError::GroupDisabled);
             }
             let group_user: GroupUser = self.group_users_show(group_id, user)?;
-            if group_user.role < 2 {
+            if group_user.role.to_int() < 2 {
                 return Err(AZGroupsError::Unauthorised);
             }
 
@@ -403,7 +432,7 @@ mod az_groups {
             ink::env::test::set_caller::<ink::env::DefaultEnvironment>(accounts.alice);
             // = * it creates the group user with the role applicant
             result = az_groups.group_users_create(0);
-            assert_eq!(result.unwrap().role, 1);
+            assert_eq!(result.unwrap().role, Role::Applicant);
         }
 
         #[ink::test]
@@ -446,7 +475,7 @@ mod az_groups {
             az_groups.group_users_create(0).unwrap();
             ink::env::test::set_caller::<ink::env::DefaultEnvironment>(accounts.bob);
             az_groups
-                .group_users_update(0, accounts.charlie, 0)
+                .group_users_update(0, accounts.charlie, Role::Banned)
                 .unwrap();
             ink::env::test::set_caller::<ink::env::DefaultEnvironment>(accounts.charlie);
             // ===== * it raises an error
@@ -460,7 +489,7 @@ mod az_groups {
             // ==== when caller role is greater than or equal to 3
             ink::env::test::set_caller::<ink::env::DefaultEnvironment>(accounts.bob);
             az_groups
-                .group_users_update(0, accounts.charlie, 3)
+                .group_users_update(0, accounts.charlie, Role::Admin)
                 .unwrap();
             // ===== when caller's role is less than user's role
             ink::env::test::set_caller::<ink::env::DefaultEnvironment>(accounts.charlie);
@@ -470,7 +499,7 @@ mod az_groups {
             // ===== when caller's role is greater than or equal to user's role
             ink::env::test::set_caller::<ink::env::DefaultEnvironment>(accounts.bob);
             az_groups
-                .group_users_update(0, accounts.charlie, 4)
+                .group_users_update(0, accounts.charlie, Role::SuperAdmin)
                 .unwrap();
             // ===== * it destroys UserGroup
             az_groups.group_users_destroy(0, accounts.charlie).unwrap();
@@ -481,26 +510,16 @@ mod az_groups {
         fn test_group_users_update() {
             let (accounts, mut az_groups) = init();
             let group_name: String = MOCK_GROUP_NAME.to_string();
-            // when role is greater than 4
-            // * it raises an error
-            let mut result = az_groups.group_users_update(0, accounts.alice, 5);
-            assert_eq!(
-                result,
-                Err(AZGroupsError::UnprocessableEntity(
-                    "Role must be less than or equal to 4".to_string()
-                ))
-            );
-            // when role is less than or equal to 4
             // = when group with key exists
             az_groups.groups_create(group_name).unwrap();
             // == when caller equals user
             // == * it raises an error
-            result = az_groups.group_users_update(0, accounts.bob, 4);
+            let mut result = az_groups.group_users_update(0, accounts.bob, Role::SuperAdmin);
             assert_eq!(result, Err(AZGroupsError::Unauthorised));
             // == when caller is different to user
             // === when caller does not have a group user for team
             ink::env::test::set_caller::<ink::env::DefaultEnvironment>(accounts.charlie);
-            result = az_groups.group_users_update(0, accounts.bob, 4);
+            result = az_groups.group_users_update(0, accounts.bob, Role::SuperAdmin);
             // === * it raises an error
             assert_eq!(
                 result,
@@ -511,20 +530,20 @@ mod az_groups {
             // ==== when caller's role is less than 3
             let mut caller_group_user: GroupUser =
                 az_groups.group_users.get((0, accounts.bob)).unwrap();
-            caller_group_user.role = 2;
+            caller_group_user.role = Role::Member;
             az_groups
                 .group_users
                 .insert((0, accounts.bob), &caller_group_user);
             // ==== * it raises an error
-            result = az_groups.group_users_update(0, accounts.bob, 2);
+            result = az_groups.group_users_update(0, accounts.bob, Role::Member);
             assert_eq!(result, Err(AZGroupsError::Unauthorised));
             // ==== when caller's role is 3 or more
-            caller_group_user.role = 3;
+            caller_group_user.role = Role::Admin;
             az_groups
                 .group_users
                 .insert((0, accounts.bob), &caller_group_user);
             // ===== when user does not have a group user for team
-            result = az_groups.group_users_update(0, accounts.charlie, 4);
+            result = az_groups.group_users_update(0, accounts.charlie, Role::SuperAdmin);
             // ===== * it raises an error
             assert_eq!(
                 result,
@@ -532,25 +551,27 @@ mod az_groups {
             );
             // ===== when user has a role with team
             // ====== when caller's role is less than user's role
-            let mut user_group_user: GroupUser = GroupUser { role: 4 };
+            let mut user_group_user: GroupUser = GroupUser {
+                role: Role::SuperAdmin,
+            };
             az_groups
                 .group_users
                 .insert((0, accounts.charlie), &user_group_user);
             // ====== * it raises an error
-            result = az_groups.group_users_update(0, accounts.charlie, 4);
+            result = az_groups.group_users_update(0, accounts.charlie, Role::SuperAdmin);
             assert_eq!(result, Err(AZGroupsError::Unauthorised));
             // ====== when caller's role is greater than or equal to user's role
-            user_group_user = GroupUser { role: 3 };
+            user_group_user = GroupUser { role: Role::Admin };
             az_groups
                 .group_users
                 .insert((0, accounts.charlie), &user_group_user);
             // ======= when new role is less than or equal to caller's role
             // ======= * it updates the user's role
-            result = az_groups.group_users_update(0, accounts.charlie, 3);
-            assert_eq!(result.unwrap().role, 3);
+            result = az_groups.group_users_update(0, accounts.charlie, Role::Admin);
+            assert_eq!(result.unwrap().role, Role::Admin);
             // ======= when new role is greater than caller's role
             // ======= * it raises an error
-            result = az_groups.group_users_update(0, accounts.charlie, 4);
+            result = az_groups.group_users_update(0, accounts.charlie, Role::SuperAdmin);
             assert_eq!(result, Err(AZGroupsError::Unauthorised));
         }
 
@@ -569,7 +590,7 @@ mod az_groups {
             assert_eq!(group.enabled, true);
             // * it creates and sets a new GroupUser with the caller as super admin
             let group_user: GroupUser = az_groups.group_users.get((0, accounts.bob)).unwrap();
-            assert_eq!(group_user.role, 4);
+            assert_eq!(group_user.role, Role::SuperAdmin);
             // * it sets the group_id_by_name
             assert_eq!(az_groups.group_id_by_name.get(key.clone()).unwrap(), 0);
             // * it increases the groups total by one
@@ -731,14 +752,17 @@ mod az_groups {
             // === * it returns the role number
             az_groups
                 .group_users
-                .insert((0, accounts.bob), &GroupUser { role: 2 });
+                .insert((0, accounts.bob), &GroupUser { role: Role::Member });
             result = az_groups.validate_membership(0, accounts.bob);
-            assert_eq!(result.unwrap(), 2);
+            assert_eq!(result.unwrap(), Role::Member);
             // === when GroupUser is banned or applicant
             // === * it raises an error
-            az_groups
-                .group_users
-                .insert((0, accounts.bob), &GroupUser { role: 1 });
+            az_groups.group_users.insert(
+                (0, accounts.bob),
+                &GroupUser {
+                    role: Role::Applicant,
+                },
+            );
             result = az_groups.validate_membership(0, accounts.bob);
             assert_eq!(result, Err(AZGroupsError::Unauthorised));
             // = when group is disabled
