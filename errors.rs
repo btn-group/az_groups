@@ -9,6 +9,7 @@ pub enum AZGroupsError {
     ContractCall(LangError),
     GroupDisabled,
     InkEnvError(String),
+    NotAMember,
     NotFound(String),
     Unauthorised,
     UnprocessableEntity(String),
