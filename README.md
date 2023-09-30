@@ -125,9 +125,9 @@ cargo sort
 ```sh
 cargo contract build --release
 ```
-2. If setting up locally, start a local development chain. Download the binary [here](https://github.com/paritytech/substrate-contracts-node/releases), install, then run:
+2. If setting up locally, start a local development chain. Recommended [swanky-node](https://github.com/AstarNetwork/swanky-node) v0.13.0:
 ```sh
-substrate-contracts-node
+~/Desktop/swanky-node/target/release/swanky-node --dev --tmp -lruntime=trace -lruntime::contracts=debug -lerror
 ```
 3. Upload, initialise and interact with contract at [Contracts UI](https://contracts-ui.substrate.io/).
 
